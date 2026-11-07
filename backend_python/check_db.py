@@ -22,3 +22,4 @@ cur.execute("SELECT count(*) FROM staff;")
 print('Staff count:', cur.fetchone()[0])
 
 conn.close()
+

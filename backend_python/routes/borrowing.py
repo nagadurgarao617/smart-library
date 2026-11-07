@@ -377,3 +377,4 @@ def staff_confirm_return(
         "message": f"Book return verified and inventory synchronized. Book '{book.title if book else ''}' is now marked available.",
         "transaction": format_transaction_out(tx)
     }
+

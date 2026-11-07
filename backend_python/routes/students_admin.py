@@ -150,3 +150,4 @@ def update_student(
     db.commit()
     db.refresh(student)
     return {"message": "Student details updated successfully."}
+

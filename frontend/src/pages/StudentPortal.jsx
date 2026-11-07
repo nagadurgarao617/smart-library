@@ -8,6 +8,7 @@ import {
   Layers,
   Compass,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   RefreshCw,
   X,
@@ -20,6 +21,7 @@ import {
   KeyRound,
   LogOut,
   ChevronRight,
+  ChevronLeft,
   Bookmark,
   CheckCircle2,
   AlertCircle,
@@ -31,6 +33,175 @@ import {
 import { api } from '../services/api';
 import InteractiveMapViewer from '../components/InteractiveMapViewer';
 
+// ─── DEDICATED FULL-PAGE BOOK DETAILS VIEW ──────────────────────────────────
+function DedicatedBookDetailsView({
+  book,
+  onBack,
+  onOpenMap,
+  onCollectBook
+}) {
+  const isAvailable = (book.available_copies || 0) > 1 || book.availability_status === 'Available';
+  const isLimited = (book.available_copies || 0) === 1 || book.availability_status === 'Limited Copies Available';
+  const isOutOfStock = (book.available_copies || 0) === 0 || book.availability_status === 'Not Available';
+
+  const badgeColor = isOutOfStock
+    ? 'bg-rose-100 text-rose-700 border-rose-300'
+    : isLimited
+    ? 'bg-amber-100 text-amber-800 border-amber-300'
+    : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+
+  const statusText = isOutOfStock ? 'Not Available' : isLimited ? 'Limited Copies Available' : 'Available';
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-200">
+      {/* Top Back Navigation Bar */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-extrabold text-xs shadow-sm hover:shadow transition-all group"
+        >
+          <ArrowLeft className="w-4 h-4 text-blue-600 group-hover:-translate-x-1 transition-transform" />
+          Back to Search Results
+        </button>
+
+        <div className="text-xs text-slate-500 font-medium hidden sm:block">
+          <span className="hover:underline cursor-pointer" onClick={onBack}>Search Results</span>
+          <span className="mx-2 text-slate-300">/</span>
+          <span className="text-slate-900 font-bold truncate max-w-xs inline-block align-bottom">{book.title}</span>
+        </div>
+      </div>
+
+      {/* Main Full-Width Book Card */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xl space-y-6">
+        {/* Header Tag Strip */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-slate-100">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+              {book.department}
+            </span>
+            {book.category && (
+              <span className="px-3.5 py-1 rounded-full text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200">
+                {book.category}
+              </span>
+            )}
+            {book.book_id && (
+              <span className="px-3.5 py-1 rounded-full text-xs font-mono font-bold text-slate-500 bg-slate-50 border border-slate-200">
+                ID: {book.book_id}
+              </span>
+            )}
+          </div>
+
+          <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border ${badgeColor}`}>
+            ● {statusText}
+          </span>
+        </div>
+
+        {/* Title & Author */}
+        <div>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 leading-tight mb-2">
+            {book.title}
+          </h1>
+          <p className="text-sm sm:text-base text-slate-600 font-semibold">
+            Author: <strong className="text-slate-900 font-extrabold">{book.author}</strong>
+            <span className="mx-2 text-slate-300">•</span>
+            Subject: <strong className="text-slate-800 font-bold">{book.subject}</strong>
+          </p>
+          {book.isbn && (
+            <p className="text-xs text-slate-400 font-mono mt-1.5">ISBN: {book.isbn}</p>
+          )}
+        </div>
+
+        {/* Architectural Location Showcase */}
+        <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 rounded-3xl p-6 text-white shadow-lg space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-white/10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-black text-xs border border-blue-400/30">
+                📍
+              </div>
+              <h3 className="font-extrabold text-sm sm:text-base text-white">Physical Architectural Location in Library</h3>
+            </div>
+            <span className="text-xs text-blue-300 font-bold">
+              {book.floor}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Floor Level</span>
+              <span className="text-base font-black text-white">{book.floor}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">
+                {book.floor.includes('First') ? 'Upper Level (1F)' : 'Ground Level (GF)'}
+              </span>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <span className="text-[10px] font-bold text-blue-300 uppercase tracking-wider block mb-1">Rack Number</span>
+              <span className="text-base font-black text-amber-300 font-mono">{book.rack_number}</span>
+              <span className="text-[10px] text-slate-300 block truncate mt-0.5">{book.rack_name}</span>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Shelf Number</span>
+              <span className="text-base font-black text-sky-300">Shelf {book.shelf_number || 1}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">Vertical Tier {book.shelf_number || 1}</span>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Exact Position</span>
+              <span className="text-sm font-extrabold text-white truncate block">{book.position || 'Main Stacks'}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">Shelf bay position</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Copy Availability Breakdown */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Cataloged Copies</span>
+            <span className="text-2xl font-black text-slate-900">{book.total_copies || 2}</span>
+          </div>
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
+            <span className="text-[10px] uppercase font-bold text-emerald-600 block">Available on Shelf</span>
+            <span className="text-2xl font-black text-emerald-700">{book.available_copies ?? 1}</span>
+          </div>
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center">
+            <span className="text-[10px] uppercase font-bold text-amber-600 block">Currently Borrowed</span>
+            <span className="text-2xl font-black text-amber-700">{book.borrowed_copies ?? 0}</span>
+          </div>
+        </div>
+
+        {/* Primary Action Buttons */}
+        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center gap-3">
+          <button
+            onClick={() => onOpenMap(book)}
+            className="w-full sm:flex-1 flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-sm shadow-lg shadow-blue-600/25 transition-all hover:scale-[1.01]"
+          >
+            <MapPin className="w-4 h-4 text-sky-200" />
+            VIEW PATH &amp; START INDOOR NAVIGATION
+          </button>
+
+          {!isOutOfStock && (
+            <button
+              onClick={() => onCollectBook(book)}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg shadow-emerald-600/25 transition-all hover:scale-[1.01]"
+            >
+              BORROW / COLLECT BOOK
+            </button>
+          )}
+
+          <button
+            onClick={onBack}
+            className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-colors"
+          >
+            Back to Results
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN STUDENT PORTAL COMPONENT ──────────────────────────────────────────
 export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin }) {
   // Navigation tab state inside Student Dashboard
   // 'overview' | 'search' | 'borrowed' | 'history' | 'notifications' | 'profile'
@@ -45,6 +216,13 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
   const [books, setBooks] = useState([]);
   const [loadingBooks, setLoadingBooks] = useState(false);
   const [totalBooksCount, setTotalBooksCount] = useState(0);
+
+  // Pagination for 5 books per page in search results
+  const [searchPage, setSearchPage] = useState(1);
+  const RESULTS_PER_PAGE = 5;
+
+  // Dedicated Selected Book for Details Page
+  const [selectedBookForDetails, setSelectedBookForDetails] = useState(null);
 
   // Active Map Modal
   const [mapBook, setMapBook] = useState(null);
@@ -99,6 +277,7 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
 
   // ── Fetch Books on Search or Filter Change ──
   useEffect(() => {
+    setSearchPage(1);
     const timer = setTimeout(() => {
       fetchBooks();
     }, 200);
@@ -165,10 +344,17 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
     const res = await api.collectBook(book.id, true);
     setActionSuccessMsg(res.message || `Successfully borrowed '${book.title}'!`);
     setTimeout(() => setActionSuccessMsg(''), 5000);
-    // Refresh student data & book list
     loadStudentLoans();
     loadNotifications();
     fetchBooks();
+    // Update active book details if viewing
+    if (selectedBookForDetails && selectedBookForDetails.id === book.id) {
+      setSelectedBookForDetails({
+        ...selectedBookForDetails,
+        available_copies: Math.max(0, (selectedBookForDetails.available_copies || 1) - 1),
+        borrowed_copies: (selectedBookForDetails.borrowed_copies || 0) + 1
+      });
+    }
     return res;
   };
 
@@ -242,13 +428,17 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
     setStudentUser(null);
   };
 
+  // ── Pagination Calculation (5 results per page) ──
+  const totalPages = Math.ceil(books.length / RESULTS_PER_PAGE) || 1;
+  const currentBooksSlice = books.slice((searchPage - 1) * RESULTS_PER_PAGE, searchPage * RESULTS_PER_PAGE);
+
   // ── AUTHENTICATION GATE: IF NOT LOGGED IN ──
   if (!studentUser) {
     return (
       <div className="min-h-[85vh] bg-slate-900 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-slate-950 border border-blue-500/30 rounded-3xl p-8 text-center shadow-2xl">
           <div className="w-16 h-16 rounded-3xl bg-blue-600/20 text-blue-400 flex items-center justify-center mx-auto mb-4 border border-blue-500/30">
-            <Lock className="w-8 h-8" />
+            <GraduationCap className="w-8 h-8" />
           </div>
           <h2 className="text-2xl font-black text-white mb-2">Authentication Required</h2>
           <p className="text-xs text-slate-400 leading-relaxed mb-6">
@@ -261,7 +451,7 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
             }}
             className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-sm shadow-lg shadow-blue-600/30 transition-all hover:scale-102 flex items-center justify-center gap-2"
           >
-            <LogIn className="w-4 h-4" /> Go to Student Login
+            <LogOut className="w-4 h-4" /> Go to Student Login
           </button>
         </div>
       </div>
@@ -297,7 +487,6 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
 
             {/* Notification Bell & Logout */}
             <div className="flex items-center gap-3">
-              {/* Notification Bell with Badge */}
               <div className="relative">
                 <button
                   onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
@@ -312,7 +501,6 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
                   )}
                 </button>
 
-                {/* Notifications Dropdown Panel */}
                 {isNotifDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 text-slate-800 p-4 z-50 animate-in fade-in slide-in-from-top-2">
                     <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2">
@@ -364,7 +552,6 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
                 )}
               </div>
 
-              {/* Logout Button */}
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-400/30 text-xs font-bold transition-all"
@@ -378,7 +565,7 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
         </div>
       </header>
 
-      {/* ── GLOBAL ACTION ALERT TOASTS ── */}
+      {/* ── ACTION ALERT TOAST ── */}
       {actionSuccessMsg && (
         <div className="bg-emerald-600 text-white px-4 py-2.5 text-center text-xs font-bold shadow-md flex items-center justify-center gap-2 sticky top-16 z-20 animate-in fade-in">
           <CheckCircle className="w-4 h-4" />
@@ -389,7 +576,7 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
 
       {/* ── MAIN DASHBOARD LAYOUT: SIDEBAR + CONTENT AREA ── */}
       <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row gap-6">
-        {/* ── SIDEBAR NAVIGATION (Vasavi E-CAP Structure) ── */}
+        {/* SIDEBAR NAVIGATION */}
         <aside className="w-full md:w-64 shrink-0">
           <div className="bg-white rounded-3xl p-4 shadow-xl border border-slate-200/80 sticky top-24 space-y-1">
             <div className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
@@ -409,7 +596,12 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    if (tab.id !== 'search') {
+                      setSelectedBookForDetails(null);
+                    }
+                  }}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
@@ -444,7 +636,7 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
           </div>
         </aside>
 
-        {/* ── TAB CONTENT AREA ── */}
+        {/* ── MAIN TAB CONTENT AREA ── */}
         <main className="flex-1 min-w-0">
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
@@ -463,7 +655,10 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
                     animated walking navigation straight to your shelf.
                   </p>
                   <button
-                    onClick={() => setActiveTab('search')}
+                    onClick={() => {
+                      setActiveTab('search');
+                      setSelectedBookForDetails(null);
+                    }}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-lg transition-transform hover:scale-105"
                   >
                     <Search className="w-4 h-4" /> Search &amp; Navigate Books
@@ -510,7 +705,7 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
                 </div>
               </div>
 
-              {/* Urgent Due Date Alert Box (if any book is due soon or overdue) */}
+              {/* Urgent Due Date Alert Box */}
               {activeLoans.some(l => l.is_overdue || l.days_left <= 3) && (
                 <div className="bg-amber-50 border-2 border-amber-300 rounded-3xl p-5 text-amber-900 shadow-sm">
                   <div className="flex items-center gap-2 mb-2 font-black text-sm">
@@ -611,7 +806,10 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
                     <BookOpen className="w-10 h-10 mx-auto mb-2 text-slate-300" />
                     <p className="text-xs font-semibold">You have no borrowed books currently.</p>
                     <button
-                      onClick={() => setActiveTab('search')}
+                      onClick={() => {
+                        setActiveTab('search');
+                        setSelectedBookForDetails(null);
+                      }}
                       className="mt-3 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs"
                     >
                       Find Books To Borrow
@@ -622,187 +820,206 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
             </div>
           )}
 
-          {/* TAB 2: SEARCH BOOKS & WAYPOINT NAVIGATION MAP */}
+          {/* TAB 2: SEARCH BOOKS & DEDICATED BOOK DETAILS PAGE */}
           {activeTab === 'search' && (
-            <div className="space-y-6">
-              {/* Search Control Box */}
-              <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-                <div className="relative">
-                  <Search className="w-5 h-5 text-blue-600 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search by Title, Author, Subject, Department, or Category..."
-                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none text-sm font-semibold"
-                    autoFocus
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Filter Row */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Department</label>
-                    <select
-                      value={selectedDept}
-                      onChange={(e) => setSelectedDept(e.target.value)}
-                      className="w-full px-2.5 py-2 rounded-xl border border-slate-200 font-semibold bg-white"
-                    >
-                      {['All', 'CSE', 'ECE', 'EEE', 'Civil', 'Mechanical', 'MBA', 'Basic Sciences'].map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Floor</label>
-                    <select
-                      value={selectedFloor}
-                      onChange={(e) => setSelectedFloor(e.target.value)}
-                      className="w-full px-2.5 py-2 rounded-xl border border-slate-200 font-semibold bg-white"
-                    >
-                      <option value="All">All Floors</option>
-                      <option value="Ground Floor">Ground Floor (GF)</option>
-                      <option value="First Floor">First Floor (1F)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Availability</label>
-                    <select
-                      value={selectedAvailability}
-                      onChange={(e) => setSelectedAvailability(e.target.value)}
-                      className="w-full px-2.5 py-2 rounded-xl border border-slate-200 font-semibold bg-white"
-                    >
-                      <option value="All">All Statuses</option>
-                      <option value="Available">Available (Green)</option>
-                      <option value="Not Available">Not Available (Red)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Floor Map View</label>
-                    <button
-                      onClick={() => { setMapBook(null); setIsMapOpen(true); }}
-                      className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold flex items-center justify-center gap-1.5"
-                    >
-                      <Layers className="w-3.5 h-3.5 text-sky-400" /> View Map
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Books List Header */}
-              <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                  Catalog Results ({totalBooksCount} titles)
-                </span>
-                {loadingBooks && <span className="text-xs text-blue-600 animate-pulse font-bold">Loading books...</span>}
-              </div>
-
-              {/* Book Cards Grid */}
-              {books.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {books.map((book) => {
-                    // Availability status indicators (Green, Orange, Red)
-                    const isAvailable = (book.available_copies || 0) > 1 || book.availability_status === 'Available';
-                    const isLimited = (book.available_copies || 0) === 1 || book.availability_status === 'Limited Copies Available';
-                    const isOutOfStock = (book.available_copies || 0) === 0 || book.availability_status === 'Not Available';
-
-                    const badgeColor = isOutOfStock
-                      ? 'bg-rose-100 text-rose-700 border-rose-300'
-                      : isLimited
-                      ? 'bg-amber-100 text-amber-800 border-amber-300'
-                      : 'bg-emerald-100 text-emerald-800 border-emerald-300';
-
-                    const statusText = isOutOfStock ? 'Not Available' : isLimited ? 'Limited Copies Available' : 'Available';
-
-                    return (
-                      <div
-                        key={book.id}
-                        className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
-                      >
-                        <div>
-                          {/* Title & Status Badge */}
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border bg-blue-50 text-blue-700 border-blue-200">
-                              {book.department}
-                            </span>
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${badgeColor}`}>
-                              {statusText}
-                            </span>
-                          </div>
-
-                          <h4 className="font-extrabold text-sm sm:text-base text-slate-900 leading-snug mb-1">
-                            {book.title}
-                          </h4>
-                          <p className="text-xs text-slate-500 mb-3">
-                            by <strong className="text-slate-700">{book.author}</strong> • {book.subject}
-                          </p>
-
-                          {/* Location & Copies Details Grid */}
-                          <div className="grid grid-cols-3 gap-2 p-3 bg-slate-50 rounded-2xl text-[11px] border border-slate-100 mb-4">
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Floor</span>
-                              <strong className="text-slate-800">{book.floor}</strong>
-                            </div>
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Rack No.</span>
-                              <strong className="text-blue-700">{book.rack_number}</strong>
-                            </div>
-                            <div>
-                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Shelf</span>
-                              <strong className="text-slate-800">Shelf {book.shelf_number || 1}</strong>
-                            </div>
-                            <div className="col-span-3 pt-1 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500">
-                              <span>Total Copies: <strong>{book.total_copies || 2}</strong></span>
-                              <span>Available: <strong className="text-emerald-700">{book.available_copies ?? 1}</strong></span>
-                              <span>Borrowed: <strong className="text-amber-700">{book.borrowed_copies ?? 0}</strong></span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action: VIEW PATH BUTTON */}
-                        <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setMapBook(book);
-                              setIsMapOpen(true);
-                            }}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs shadow-md shadow-blue-600/20 transition-all hover:scale-[1.01]"
-                          >
-                            <MapPin className="w-3.5 h-3.5 text-sky-200" />
-                            VIEW PATH &amp; NAVIGATE
-                          </button>
-
-                          {/* Quick Collect Button if available */}
-                          {!isOutOfStock && (
-                            <button
-                              onClick={() => handleCollectBook(book)}
-                              className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-sm transition-all"
-                              title="Directly record borrowing"
-                            >
-                              Collect
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div>
+              {/* IF A BOOK IS SELECTED: RENDER DEDICATED FULL-PAGE VIEW */}
+              {selectedBookForDetails ? (
+                <DedicatedBookDetailsView
+                  book={selectedBookForDetails}
+                  onBack={() => setSelectedBookForDetails(null)}
+                  onOpenMap={(b) => {
+                    setMapBook(b);
+                    setIsMapOpen(true);
+                  }}
+                  onCollectBook={handleCollectBook}
+                />
               ) : (
-                <div className="bg-white rounded-3xl p-12 text-center border border-slate-200">
-                  <Search className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-                  <h4 className="font-bold text-sm text-slate-700">No books found matching your criteria</h4>
-                  <p className="text-xs text-slate-400 mt-1">Try searching by partial title, subject, or author name.</p>
+                /* MAIN CONTENT AREA: SEARCH & 5 MATCHING BOOK RESULTS */
+                <div className="space-y-6">
+                  {/* Search Control Box */}
+                  <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+                    <div className="relative">
+                      <Search className="w-5 h-5 text-blue-600 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search by Title, Author, Subject, Department, or Category..."
+                        className="w-full pl-12 pr-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-blue-600 focus:outline-none text-sm font-semibold"
+                        autoFocus
+                      />
+                      {searchTerm && (
+                        <button
+                          onClick={() => setSearchTerm('')}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Row */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Department</label>
+                        <select
+                          value={selectedDept}
+                          onChange={(e) => setSelectedDept(e.target.value)}
+                          className="w-full px-2.5 py-2 rounded-xl border border-slate-200 font-semibold bg-white"
+                        >
+                          {['All', 'CSE', 'ECE', 'EEE', 'Civil', 'Mechanical', 'MBA', 'Basic Sciences'].map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Floor</label>
+                        <select
+                          value={selectedFloor}
+                          onChange={(e) => setSelectedFloor(e.target.value)}
+                          className="w-full px-2.5 py-2 rounded-xl border border-slate-200 font-semibold bg-white"
+                        >
+                          <option value="All">All Floors</option>
+                          <option value="Ground Floor">Ground Floor (GF)</option>
+                          <option value="First Floor">First Floor (1F)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Availability</label>
+                        <select
+                          value={selectedAvailability}
+                          onChange={(e) => setSelectedAvailability(e.target.value)}
+                          className="w-full px-2.5 py-2 rounded-xl border border-slate-200 font-semibold bg-white"
+                        >
+                          <option value="All">All Statuses</option>
+                          <option value="Available">Available (Green)</option>
+                          <option value="Not Available">Not Available (Red)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Floor Map View</label>
+                        <button
+                          onClick={() => { setMapBook(null); setIsMapOpen(true); }}
+                          className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold flex items-center justify-center gap-1.5"
+                        >
+                          <Layers className="w-3.5 h-3.5 text-sky-400" /> View Map
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Results Header with Page Indicator */}
+                  <div className="flex items-center justify-between px-1">
+                    <div>
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-slate-600 block">
+                        Matching Results ({totalBooksCount} books found)
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        Displaying 5 books per page • Click any book to open full dedicated page
+                      </span>
+                    </div>
+
+                    {loadingBooks && <span className="text-xs text-blue-600 animate-pulse font-bold">Loading...</span>}
+                  </div>
+
+                  {/* 5 CLEAR SEARCH RESULT CARDS IN MAIN CONTENT AREA */}
+                  {currentBooksSlice.length > 0 ? (
+                    <div className="space-y-3.5">
+                      {currentBooksSlice.map((book) => {
+                        const isAvailable = (book.available_copies || 0) > 1 || book.availability_status === 'Available';
+                        const isLimited = (book.available_copies || 0) === 1 || book.availability_status === 'Limited Copies Available';
+                        const isOutOfStock = (book.available_copies || 0) === 0 || book.availability_status === 'Not Available';
+
+                        const badgeColor = isOutOfStock
+                          ? 'bg-rose-100 text-rose-700 border-rose-300'
+                          : isLimited
+                          ? 'bg-amber-100 text-amber-800 border-amber-300'
+                          : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+
+                        const statusText = isOutOfStock ? 'Not Available' : isLimited ? 'Limited Copies Available' : 'Available';
+
+                        return (
+                          <div
+                            key={book.id}
+                            onClick={() => setSelectedBookForDetails(book)}
+                            className="bg-white rounded-3xl p-5 border-2 border-slate-200/90 hover:border-blue-500 shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                                  {book.department}
+                                </span>
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${badgeColor}`}>
+                                  ● {statusText}
+                                </span>
+                                <span className="text-[11px] text-slate-400">
+                                  {book.floor} • Rack {book.rack_number} • Shelf {book.shelf_number || 1}
+                                </span>
+                              </div>
+
+                              <h4 className="font-extrabold text-base text-slate-900 group-hover:text-blue-600 transition-colors leading-snug">
+                                {book.title}
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                by <strong className="text-slate-700">{book.author}</strong> • Subject: {book.subject}
+                              </p>
+
+                              <div className="flex items-center gap-4 mt-2 text-[11px] text-slate-500">
+                                <span>Available: <strong className="text-emerald-700">{book.available_copies ?? 1}</strong> / {book.total_copies || 2} copies</span>
+                                <span>•</span>
+                                <span>Location: <strong className="text-slate-700">{book.position || 'Main Stacks'}</strong></span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                              <button
+                                type="button"
+                                className="px-4 py-2.5 rounded-xl bg-blue-50 group-hover:bg-blue-600 text-blue-700 group-hover:text-white font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-sm"
+                              >
+                                View Details &amp; Navigation <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-3xl p-12 text-center border border-slate-200">
+                      <Search className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                      <h4 className="font-bold text-sm text-slate-700">No books found matching your search</h4>
+                      <p className="text-xs text-slate-400 mt-1">Try searching by partial title, subject, or author name.</p>
+                    </div>
+                  )}
+
+                  {/* ── 5-PER-PAGE PAGINATION CONTROLS ── */}
+                  {books.length > RESULTS_PER_PAGE && (
+                    <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
+                      <button
+                        disabled={searchPage === 1}
+                        onClick={() => setSearchPage(p => Math.max(1, p - 1))}
+                        className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-all"
+                      >
+                        <ChevronLeft className="w-4 h-4" /> Previous 5 Books
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        <span>Page <strong>{searchPage}</strong> of <strong>{totalPages}</strong></span>
+                        <span className="text-slate-400 ml-1">({totalBooksCount} total)</span>
+                      </div>
+
+                      <button
+                        disabled={searchPage >= totalPages}
+                        onClick={() => setSearchPage(p => Math.min(totalPages, p + 1))}
+                        className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-all"
+                      >
+                        Next 5 Books <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1244,7 +1461,6 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
       {isMapOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md">
           <div className="relative w-full max-w-6xl h-[92vh] bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-slate-700 flex flex-col">
-            {/* Modal Top Header */}
             <div className="flex items-center justify-between px-6 py-3.5 bg-slate-950 border-b border-slate-800 text-white">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
@@ -1271,7 +1487,6 @@ export default function StudentPortal({ studentUser, setStudentUser, onOpenLogin
               </button>
             </div>
 
-            {/* Interactive Map Component Container */}
             <div className="flex-1 overflow-hidden">
               <InteractiveMapViewer
                 selectedBook={mapBook}
