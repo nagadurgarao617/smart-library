@@ -16,36 +16,90 @@ import {
   RefreshCw,
   AlertCircle,
   X,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Bookmark,
+  Users,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  Sparkles,
+  Phone,
+  Mail,
+  GraduationCap
 } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function StaffPortal({ staffUser, setStaffUser }) {
+  // Navigation Tabs in Staff Portal: 'dashboard' | 'books' | 'borrowing' | 'students' | 'racks'
+  const [activeTab, setActiveTab] = useState('dashboard');
+
   // Login Form State
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Dashboard Inventory State
-  const [stats, setStats] = useState(null);
-  const [books, setBooks] = useState([]);
-  const [totalBooks, setTotalBooks] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterFloor, setFilterFloor] = useState('All');
-  const [isLoadingBooks, setIsLoadingBooks] = useState(false);
-
-  // Modals
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
-  const [activeBook, setActiveBook] = useState(null);
-
-  // Notification message
+  // Global Notification
   const [notification, setNotification] = useState('');
 
-  // Check login status on mount
+  // ── Metrics State ──
+  const [stats, setStats] = useState(null);
+
+  // ── Book Management State ──
+  const [books, setBooks] = useState([]);
+  const [totalBooks, setTotalBooks] = useState(0);
+  const [bookSearch, setBookSearch] = useState('');
+  const [bookFloorFilter, setBookFloorFilter] = useState('All');
+  const [bookDeptFilter, setBookDeptFilter] = useState('All');
+  const [isLoadingBooks, setIsLoadingBooks] = useState(false);
+  const [isAddBookModalOpen, setIsAddBookModalOpen] = useState(false);
+  const [isEditBookModalOpen, setIsEditBookModalOpen] = useState(false);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [bookForm, setBookForm] = useState({
+    title: '',
+    author: '',
+    subject: '',
+    department: 'CSE',
+    category: '',
+    isbn: '',
+    total_copies: 2,
+    available_copies: 2,
+    floor: 'Ground Floor',
+    rack_number: 'RACK-01',
+    rack_name: 'Computer Science Core',
+    shelf_number: 1,
+    position: 'Row 1, Top Shelf'
+  });
+
+  // ── Borrowing Transactions State ──
+  const [transactions, setTransactions] = useState([]);
+  const [txFilter, setTxFilter] = useState('ALL');
+  const [txSearch, setTxSearch] = useState('');
+  const [isLoadingTx, setIsLoadingTx] = useState(false);
+  const [confirmingTxId, setConfirmingTxId] = useState(null);
+
+  // ── Student Management State ──
+  const [studentsList, setStudentsList] = useState([]);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentDeptFilter, setStudentDeptFilter] = useState('All');
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false);
+  const [viewingStudent, setViewingStudent] = useState(null);
+  const [isEditStudentModalOpen, setIsEditStudentModalOpen] = useState(false);
+  const [studentEditForm, setStudentEditForm] = useState({
+    id: null,
+    name: '',
+    department: '',
+    year: '',
+    phone: '',
+    email: '',
+    is_active: true
+  });
+
+  // ── Racks Explorer State ──
+  const [racksList, setRacksList] = useState([]);
+
+  // Check login on mount
   useEffect(() => {
     const token = localStorage.getItem('svec_staff_token');
     if (token) {
@@ -53,17 +107,37 @@ export default function StaffPortal({ staffUser, setStaffUser }) {
     }
   }, []);
 
-  // Fetch stats and books when staffUser is logged in
+  // When staff is logged in, refresh data
   useEffect(() => {
     if (staffUser) {
-      loadStats();
+      loadAllDashboardData();
+    }
+  }, [staffUser]);
+
+  // Load books when filters change
+  useEffect(() => {
+    if (staffUser && activeTab === 'books') {
       loadBooks();
     }
-  }, [staffUser, currentPage, filterFloor]);
+  }, [staffUser, activeTab, bookFloorFilter, bookDeptFilter]);
+
+  // Load transactions when filter changes
+  useEffect(() => {
+    if (staffUser && activeTab === 'borrowing') {
+      loadTransactions();
+    }
+  }, [staffUser, activeTab, txFilter]);
+
+  // Load students when student tab selected
+  useEffect(() => {
+    if (staffUser && activeTab === 'students') {
+      loadStudents();
+    }
+  }, [staffUser, activeTab, studentDeptFilter]);
 
   const showNotification = (msg) => {
     setNotification(msg);
-    setTimeout(() => setNotification(''), 4000);
+    setTimeout(() => setNotification(''), 5000);
   };
 
   const fetchStaffProfile = async () => {
@@ -76,6 +150,14 @@ export default function StaffPortal({ staffUser, setStaffUser }) {
     }
   };
 
+  const loadAllDashboardData = async () => {
+    loadStats();
+    loadBooks();
+    loadTransactions();
+    loadStudents();
+    loadRacks();
+  };
+
   const loadStats = async () => {
     try {
       const res = await api.getStats();
@@ -85,17 +167,17 @@ export default function StaffPortal({ staffUser, setStaffUser }) {
     }
   };
 
-  const loadBooks = async (query = searchQuery) => {
+  const loadBooks = async () => {
     setIsLoadingBooks(true);
     try {
-      const res = await api.getAllBooks({
-        page: currentPage,
-        limit: 20,
-        floor: filterFloor,
-        search: query
+      const res = await api.searchBooks({
+        q: bookSearch.trim() || undefined,
+        floor: bookFloorFilter !== 'All' ? bookFloorFilter : undefined,
+        department: bookDeptFilter !== 'All' ? bookDeptFilter : undefined,
+        limit: 300
       });
       setBooks(res.books || []);
-      setTotalBooks(res.pagination?.total || 0);
+      setTotalBooks(res.count || 0);
     } catch (err) {
       console.error('Failed to load books:', err);
     } finally {
@@ -103,17 +185,61 @@ export default function StaffPortal({ staffUser, setStaffUser }) {
     }
   };
 
+  const loadTransactions = async () => {
+    setIsLoadingTx(true);
+    try {
+      const res = await api.getStaffTransactions({
+        status: txFilter !== 'ALL' ? txFilter : undefined,
+        search: txSearch.trim() || undefined
+      });
+      setTransactions(res.transactions || []);
+    } catch (err) {
+      console.error('Failed to load transactions:', err);
+    } finally {
+      setIsLoadingTx(false);
+    }
+  };
+
+  const loadStudents = async () => {
+    setIsLoadingStudents(true);
+    try {
+      const res = await api.getStaffStudents({
+        search: studentSearch.trim() || undefined,
+        department: studentDeptFilter !== 'All' ? studentDeptFilter : undefined
+      });
+      setStudentsList(res.students || []);
+    } catch (err) {
+      console.error('Failed to load students:', err);
+    } finally {
+      setIsLoadingStudents(false);
+    }
+  };
+
+  const loadRacks = async () => {
+    try {
+      const res = await api.getRacks();
+      setRacksList(res.racks || []);
+    } catch (err) {
+      console.error('Failed to load racks:', err);
+    }
+  };
+
+  // ── Authentication Handlers ──
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoginError('');
+    if (!username.trim() || !password) {
+      setLoginError('Staff username and password are required.');
+      return;
+    }
     setIsLoggingIn(true);
+    setLoginError('');
     try {
-      const res = await api.login(username, password);
+      const res = await api.login(username.trim(), password);
       localStorage.setItem('svec_staff_token', res.token);
       setStaffUser(res.staff);
-      showNotification(`Welcome, ${res.staff.name || res.staff.username}!`);
+      showNotification(`Welcome back, ${res.staff.name}`);
     } catch (err) {
-      setLoginError(err.message || 'Invalid username or password');
+      setLoginError(err.message || 'Invalid staff credentials.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -122,727 +248,1257 @@ export default function StaffPortal({ staffUser, setStaffUser }) {
   const handleLogout = () => {
     localStorage.removeItem('svec_staff_token');
     setStaffUser(null);
-    showNotification('Logged out successfully.');
   };
 
-  // Toggle book availability (instant update in DB & Student Portal)
-  const handleToggleAvailability = async (book) => {
-    const newStatus = book.availability_status === 'Available' ? 'Issued' : 'Available';
+  // ── Book CRUD Handlers ──
+  const handleAddBookSubmit = async (e) => {
+    e.preventDefault();
     try {
-      await api.updateAvailability(book.id, newStatus);
-      showNotification(`"${book.title}" marked as ${newStatus}`);
-      loadStats();
+      await api.createBook({
+        ...bookForm,
+        shelf_number: parseInt(bookForm.shelf_number, 10) || 1,
+        total_copies: parseInt(bookForm.total_copies, 10) || 1,
+        available_copies: parseInt(bookForm.available_copies, 10) || 1
+      });
+      showNotification(`Book '${bookForm.title}' added successfully!`);
+      setIsAddBookModalOpen(false);
       loadBooks();
+      loadStats();
     } catch (err) {
-      alert(`Failed to update status: ${err.message}`);
+      showNotification('Error: ' + err.message);
     }
   };
 
-  // Delete book record
+  const handleEditBookSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedBook) return;
+    try {
+      await api.updateBook(selectedBook.id, {
+        ...bookForm,
+        shelf_number: parseInt(bookForm.shelf_number, 10) || 1,
+        total_copies: parseInt(bookForm.total_copies, 10) || 1,
+        available_copies: parseInt(bookForm.available_copies, 10) || 1
+      });
+      showNotification(`Book '${bookForm.title}' updated successfully!`);
+      setIsEditBookModalOpen(false);
+      loadBooks();
+      loadStats();
+    } catch (err) {
+      showNotification('Error: ' + err.message);
+    }
+  };
+
   const handleDeleteBook = async (book) => {
-    if (!window.confirm(`Are you sure you want to delete "${book.title}" from library inventory?`)) {
+    if (!window.confirm(`Are you sure you want to delete '${book.title}'? This action cannot be undone.`)) {
       return;
     }
     try {
       await api.deleteBook(book.id);
-      showNotification(`Book deleted successfully.`);
-      loadStats();
+      showNotification(`Book '${book.title}' deleted successfully.`);
       loadBooks();
+      loadStats();
     } catch (err) {
-      alert(`Failed to delete book: ${err.message}`);
+      showNotification('Error: ' + err.message);
     }
   };
 
-  // 1. IF NOT LOGGED IN: DISPLAY SECURE STAFF LOGIN
+  // ── Staff Return Verification ──
+  const handleConfirmReturn = async (tx) => {
+    setConfirmingTxId(tx.id);
+    try {
+      const res = await api.staffConfirmReturn(tx.id, 'Verified by staff');
+      showNotification(res.message || 'Book return confirmed and inventory updated!');
+      loadTransactions();
+      loadStats();
+      loadBooks();
+    } catch (err) {
+      showNotification('Error: ' + err.message);
+    } finally {
+      setConfirmingTxId(null);
+    }
+  };
+
+  // ── Student Management Handlers ──
+  const handleToggleStudentStatus = async (student) => {
+    try {
+      const res = await api.toggleStudentStatus(student.id);
+      showNotification(res.message);
+      loadStudents();
+    } catch (err) {
+      showNotification('Error: ' + err.message);
+    }
+  };
+
+  const handleViewStudentDetails = async (student) => {
+    try {
+      const details = await api.getStaffStudentDetails(student.id);
+      setViewingStudent(details);
+    } catch (err) {
+      showNotification('Error: ' + err.message);
+    }
+  };
+
+  const handleSaveStudentEdit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.updateStudentDetails(studentEditForm.id, studentEditForm);
+      showNotification('Student details updated successfully!');
+      setIsEditStudentModalOpen(false);
+      loadStudents();
+    } catch (err) {
+      showNotification('Error: ' + err.message);
+    }
+  };
+
+  // ── AUTHENTICATION GATE: IF NOT LOGGED IN ──
   if (!staffUser) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-slate-950 rounded-3xl p-8 border border-slate-800 shadow-2xl relative overflow-hidden">
-          {/* Top aesthetic glow */}
-          <div className="absolute -top-24 -left-24 w-48 h-48 bg-blue-600/20 rounded-full blur-2xl" />
-          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-indigo-600/20 rounded-full blur-2xl" />
-
-          <div className="text-center mb-8 relative">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white mx-auto mb-4 shadow-lg shadow-indigo-600/30">
-              <ShieldCheck className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-black tracking-tight">Staff Portal Login</h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Sri Vasavi Engineering College • Central Library
-            </p>
+      <div className="min-h-[85vh] bg-slate-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-950 border border-indigo-500/30 rounded-3xl p-8 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center mx-auto mb-4 border border-indigo-500/30">
+            <ShieldCheck className="w-7 h-7" />
           </div>
+          <h2 className="text-2xl font-black text-white text-center mb-1">Staff Portal Login</h2>
+          <p className="text-xs text-slate-400 text-center mb-6">
+            Authorized Sri Vasavi Engineering College library personnel only.
+          </p>
 
           {loginError && (
-            <div className="mb-5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{loginError}</span>
             </div>
           )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-indigo-400" /> Staff Username
+              <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wide">
+                Staff Username
               </label>
-              <input
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. staff or admin"
-                className="w-full text-xs px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. admin or staff"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                  autoFocus
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-indigo-400" /> Password
+              <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wide">
+                Password
               </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full text-xs px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter staff password"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 mt-6"
+              className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/30 transition-all hover:scale-102 mt-2"
             >
-              {isLoggingIn ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Verifying Credentials...
-                </>
-              ) : (
-                'Access Staff Dashboard'
-              )}
+              {isLoggingIn ? 'Authenticating...' : 'Sign In as Staff'}
             </button>
           </form>
 
-          {/* Helper Credentials Hint for Testing */}
-          <div className="mt-6 pt-5 border-t border-slate-800 text-center">
-            <p className="text-[11px] text-slate-400">
-              Demo Credentials: <span className="font-mono text-indigo-300">staff</span> / <span className="font-mono text-indigo-300">staff123</span> or <span className="font-mono text-indigo-300">admin</span> / <span className="font-mono text-indigo-300">admin123</span>
-            </p>
+          <div className="mt-6 pt-4 border-t border-slate-800 text-[11px] text-slate-400 text-center">
+            Demo Credentials: <strong className="text-indigo-400 font-mono">admin / admin123</strong> or <strong className="text-indigo-400 font-mono">staff / staff123</strong>
           </div>
         </div>
       </div>
     );
   }
 
-  // 2. LOGGED IN: STAFF DASHBOARD
+  // ── MAIN AUTHENTICATED STAFF DASHBOARD ──
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 pb-20">
-      {/* Toast Notification */}
-      {notification && (
-        <div className="fixed top-24 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs font-bold flex items-center gap-2 animate-bounce">
-          <CheckCircle className="w-4 h-4 text-emerald-400" />
-          <span>{notification}</span>
-        </div>
-      )}
-
-      {/* DASHBOARD TOP HEADER */}
-      <section className="bg-slate-900 text-white py-8 px-4 sm:px-6 lg:px-8 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider bg-indigo-950/60 px-2.5 py-0.5 rounded-full border border-indigo-800">
-                Librarian Administration
-              </span>
-              <span className="text-xs text-slate-400">Role: {staffUser.role}</span>
+    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans">
+      {/* ── TOP STAFF APP BAR ── */}
+      <header className="bg-slate-950 text-white shadow-md sticky top-0 z-30 border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 text-indigo-300 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-sm sm:text-base text-white">{staffUser.name}</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 text-[10px] font-bold">
+                    {staffUser.role}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400">SVEC Central Library Management Dashboard</p>
+              </div>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white mt-1">
-              Library Inventory Dashboard
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/25 transition-all"
-            >
-              <Plus className="w-4 h-4" /> Add New Book
-            </button>
 
             <button
               onClick={handleLogout}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs border border-slate-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all border border-slate-700"
             >
-              <LogOut className="w-4 h-4" /> Logout
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
-      </section>
+      </header>
 
-      {/* INVENTORY STATS METRICS CARDS */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-md">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">1. Total Books</p>
-            <p className="text-3xl font-black text-blue-700 mt-1">{stats?.totalBooks || 0}</p>
-            <span className="text-[11px] text-slate-400 mt-1 block">Across all floors & racks</span>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-md">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Available Books</p>
-            <p className="text-3xl font-black text-emerald-600 mt-1">{stats?.availableBooks || 0}</p>
-            <span className="text-[11px] text-emerald-600/80 mt-1 block font-medium">Ready for immediate issue</span>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-md">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">3. Unavailable Books</p>
-            <p className="text-3xl font-black text-rose-600 mt-1">{stats?.unavailableBooks || 0}</p>
-            <span className="text-[11px] text-rose-500/80 mt-1 block font-medium">Currently borrowed / issued</span>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-md">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">4. Total Racks</p>
-            <p className="text-3xl font-black text-indigo-600 mt-1">{stats?.totalRacks || 0}</p>
-            <span className="text-[11px] text-indigo-500/80 mt-1 block font-medium">Mapped on indoor layouts</span>
-          </div>
+      {/* ── TOAST NOTIFICATION ── */}
+      {notification && (
+        <div className="bg-indigo-600 text-white px-4 py-2.5 text-center text-xs font-bold shadow-md sticky top-16 z-20 flex items-center justify-center gap-2 animate-in fade-in">
+          <CheckCircle className="w-4 h-4" />
+          <span>{notification}</span>
+          <button onClick={() => setNotification('')} className="ml-2 hover:opacity-75">✕</button>
         </div>
-      </div>
+      )}
 
-      {/* MAIN INVENTORY TABLE & CONTROLS */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-        <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-200/80">
-          {/* Table Search & Floor Filters */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  loadBooks(e.target.value);
-                }}
-                placeholder="Search by Title, Author, ID..."
-                className="w-full text-xs pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-              />
+      {/* ── MAIN CONTENT WRAPPER: SIDEBAR + CONTENT ── */}
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row gap-6">
+        {/* SIDEBAR NAVIGATION */}
+        <aside className="w-full md:w-64 shrink-0">
+          <div className="bg-white rounded-3xl p-4 shadow-xl border border-slate-200/80 sticky top-24 space-y-1">
+            <div className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+              Staff Functions
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <span className="text-xs font-bold text-slate-500">Floor:</span>
-              <select
-                value={filterFloor}
-                onChange={(e) => {
-                  setFilterFloor(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="text-xs px-3 py-2 rounded-xl border border-slate-300 bg-white font-semibold text-slate-700"
-              >
-                <option value="All">All Floors</option>
-                <option value="Ground Floor">Ground Floor</option>
-                <option value="First Floor">First Floor</option>
-              </select>
-
-              <button
-                onClick={() => loadBooks()}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-                title="Refresh Table"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </div>
+            {[
+              { id: 'dashboard', label: 'Dashboard & Metrics', icon: BookOpen },
+              { id: 'books', label: 'Book Management', icon: Edit2, badge: stats?.totalBooks || 1046 },
+              { id: 'borrowing', label: 'Borrowing & Returns', icon: Bookmark, badge: stats?.pendingReturns || 0, badgeColor: 'bg-amber-500' },
+              { id: 'students', label: 'Student Management', icon: Users, badge: stats?.totalStudents || 5 },
+              { id: 'racks', label: 'Floor & Rack Layout', icon: Layers, badge: stats?.totalRacks || 35 }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                    isActive
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span>{tab.label}</span>
+                  </div>
+                  {tab.badge !== undefined && (
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : tab.badgeColor ? `${tab.badgeColor} text-white` : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
+        </aside>
 
-          {/* Inventory Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-y border-slate-200">
-                <tr>
-                  <th className="py-3 px-4">Book Details</th>
-                  <th className="py-3 px-4">Subject & Dept</th>
-                  <th className="py-3 px-4">Floor & Rack</th>
-                  <th className="py-3 px-4">Shelf & Position</th>
-                  <th className="py-3 px-4">Availability</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {isLoadingBooks ? (
-                  <tr>
-                    <td colSpan="6" className="py-12 text-center text-slate-400">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
-                      Loading library inventory...
-                    </td>
-                  </tr>
-                ) : books.length > 0 ? (
-                  books.map((book) => {
-                    const isAvailable = book.availability_status === 'Available';
-                    return (
-                      <tr key={book.id} className="hover:bg-slate-50/80 transition-colors">
-                        {/* Book Info */}
-                        <td className="py-3.5 px-4">
-                          <p className="font-bold text-slate-900 text-sm">{book.title}</p>
-                          <p className="text-slate-500 text-[11px] mt-0.5">
-                            by {book.author} • <span className="font-mono text-slate-400">{book.book_id}</span>
-                          </p>
-                        </td>
+        {/* MAIN BODY AREA */}
+        <main className="flex-1 min-w-0">
+          {/* TAB 1: DASHBOARD & METRICS */}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Comprehensive Stats Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Total Books</div>
+                  <div className="text-2xl font-black text-slate-900">{stats?.totalBooks || 1046}</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Cataloged titles</div>
+                </div>
 
-                        {/* Subject */}
-                        <td className="py-3.5 px-4">
-                          <span className="font-semibold text-slate-800 block">{book.subject}</span>
-                          <span className="text-[10px] text-slate-500">{book.department}</span>
-                        </td>
+                <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Available Books</div>
+                  <div className="text-2xl font-black text-emerald-600">{stats?.availableBooks || 1045}</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Ready for checkout</div>
+                </div>
 
-                        {/* Floor & Rack */}
-                        <td className="py-3.5 px-4">
-                          <span className="font-bold text-blue-700 block">{book.floor}</span>
-                          <span className="text-slate-600 font-semibold">{book.rack_number}</span>
-                        </td>
+                <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Total Borrowed</div>
+                  <div className="text-2xl font-black text-amber-600">{stats?.totalBorrowed || 1}</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Active student loans</div>
+                </div>
 
-                        {/* Shelf & Position */}
-                        <td className="py-3.5 px-4">
-                          <span className="font-semibold text-slate-800 block">Shelf {book.shelf_number}</span>
-                          <span className="text-[11px] text-slate-500">{book.position}</span>
-                        </td>
+                <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Registered Students</div>
+                  <div className="text-2xl font-black text-indigo-600">{stats?.totalStudents || 5}</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Active student cards</div>
+                </div>
 
-                        {/* Availability Toggle */}
-                        <td className="py-3.5 px-4">
-                          <button
-                            onClick={() => handleToggleAvailability(book)}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold transition-all ${
-                              isAvailable
-                                ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
-                                : 'bg-rose-100 hover:bg-rose-200 text-rose-800'
-                            }`}
-                            title="Click to toggle Available / Issued"
-                          >
-                            {isAvailable ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                            {book.availability_status}
-                          </button>
-                        </td>
+                <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Pending Returns</div>
+                  <div className="text-2xl font-black text-amber-500">{stats?.pendingReturns || 0}</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Awaiting physical check</div>
+                </div>
 
-                        {/* Action buttons */}
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Update Location */}
-                            <button
-                              onClick={() => {
-                                setActiveBook(book);
-                                setIsLocationModalOpen(true);
-                              }}
-                              className="p-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 transition-colors"
-                              title="Update Rack Location"
-                            >
-                              <MapPin className="w-3.5 h-3.5" />
-                            </button>
+                <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Overdue Loans</div>
+                  <div className="text-2xl font-black text-rose-600">{stats?.overdueLoans || 0}</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Past due return date</div>
+                </div>
 
-                            {/* Edit Details */}
-                            <button
-                              onClick={() => {
-                                setActiveBook(book);
-                                setIsEditModalOpen(true);
-                              }}
-                              className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors"
-                              title="Edit Book Details"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
+                <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Ground Floor (GF)</div>
+                  <div className="text-2xl font-black text-blue-600">{stats?.groundFloorBooks || 877}</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Main racks 1-20 &amp; MBA</div>
+                </div>
 
-                            {/* Delete */}
-                            <button
-                              onClick={() => handleDeleteBook(book)}
-                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors"
-                              title="Delete Book Record"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm">
+                  <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">First Floor (1F)</div>
+                  <div className="text-2xl font-black text-purple-600">{stats?.firstFloorBooks || 169}</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Reference &amp; Project rooms</div>
+                </div>
+              </div>
+
+              {/* Pending Return Verification Alert */}
+              {transactions.filter(t => t.status === 'RETURN_REQUESTED').length > 0 && (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-3xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-600" />
+                      <h4 className="font-extrabold text-sm text-amber-900">
+                        Pending Return Verifications ({transactions.filter(t => t.status === 'RETURN_REQUESTED').length})
+                      </h4>
+                    </div>
+                    <button
+                      onClick={() => { setActiveTab('borrowing'); setTxFilter('RETURN_REQUESTED'); }}
+                      className="text-xs font-bold text-amber-900 hover:underline"
+                    >
+                      View All in Borrowing Tab →
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {transactions
+                      .filter(t => t.status === 'RETURN_REQUESTED')
+                      .slice(0, 3)
+                      .map(t => (
+                        <div key={t.id} className="p-3 bg-white rounded-xl border border-amber-200 flex items-center justify-between gap-2 text-xs">
+                          <div>
+                            <span className="font-bold text-slate-900">{t.student_name} ({t.student_roll})</span>
+                            <span className="text-slate-500 ml-2">— '{t.book_title}'</span>
                           </div>
-                        </td>
+                          <button
+                            onClick={() => handleConfirmReturn(t)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                          >
+                            Verify &amp; Confirm Return
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent Activity Quick View */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-extrabold text-base text-slate-900">Recent Borrowing Transactions</h4>
+                  <button
+                    onClick={() => setActiveTab('borrowing')}
+                    className="text-xs font-bold text-indigo-600 hover:underline"
+                  >
+                    View All Transactions
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 uppercase text-[10px] font-bold">
+                        <th className="py-2.5 px-3">Student</th>
+                        <th className="py-2.5 px-3">Book</th>
+                        <th className="py-2.5 px-3">Issue Date</th>
+                        <th className="py-2.5 px-3">Due Date</th>
+                        <th className="py-2.5 px-3">Status</th>
                       </tr>
-                    );
-                  })
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {transactions.slice(0, 5).map(t => (
+                        <tr key={t.id} className="hover:bg-slate-50">
+                          <td className="py-2.5 px-3 font-bold text-slate-800">
+                            {t.student_name}
+                            <span className="block text-[10px] text-slate-400 font-normal font-mono">{t.student_roll}</span>
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-slate-900">{t.book_title}</td>
+                          <td className="py-2.5 px-3 text-slate-500">{new Date(t.borrow_date).toLocaleDateString()}</td>
+                          <td className="py-2.5 px-3 text-slate-500">{new Date(t.due_date).toLocaleDateString()}</td>
+                          <td className="py-2.5 px-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              t.status === 'RETURNED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : t.status === 'RETURN_REQUESTED'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {t.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: BOOK MANAGEMENT (FULL CRUD) */}
+          {activeTab === 'books' && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="relative flex-1 w-full">
+                    <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={bookSearch}
+                      onChange={(e) => setBookSearch(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && loadBooks()}
+                      placeholder="Search catalog by title, author, subject, or rack..."
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:border-indigo-600 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={loadBooks}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                    >
+                      Search
+                    </button>
+                    <button
+                      onClick={() => {
+                        setBookForm({
+                          title: '',
+                          author: '',
+                          subject: '',
+                          department: 'CSE',
+                          category: '',
+                          isbn: '',
+                          total_copies: 2,
+                          available_copies: 2,
+                          floor: 'Ground Floor',
+                          rack_number: 'RACK-01',
+                          rack_name: 'Computer Science Core',
+                          shelf_number: 1,
+                          position: 'Row 1, Top Shelf'
+                        });
+                        setIsAddBookModalOpen(true);
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-md shrink-0"
+                    >
+                      <Plus className="w-4 h-4" /> Add New Book
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Filter Floor</label>
+                    <select
+                      value={bookFloorFilter}
+                      onChange={(e) => setBookFloorFilter(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-semibold bg-white"
+                    >
+                      <option value="All">All Floors</option>
+                      <option value="Ground Floor">Ground Floor</option>
+                      <option value="First Floor">First Floor</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Filter Department</label>
+                    <select
+                      value={bookDeptFilter}
+                      onChange={(e) => setBookDeptFilter(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 font-semibold bg-white"
+                    >
+                      {['All', 'CSE', 'ECE', 'EEE', 'Civil', 'Mechanical', 'MBA', 'Basic Sciences'].map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1 flex items-end">
+                    <span className="text-xs text-slate-500 font-semibold py-1.5">
+                      Showing <strong>{books.length}</strong> of <strong>{totalBooks}</strong> books
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Books Table */}
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                        <th className="py-3 px-3">Title &amp; Author</th>
+                        <th className="py-3 px-3">Department</th>
+                        <th className="py-3 px-3">Floor &amp; Rack</th>
+                        <th className="py-3 px-3">Shelf</th>
+                        <th className="py-3 px-3">Copies (Avail/Tot)</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {books.map(b => (
+                        <tr key={b.id} className="hover:bg-slate-50/80">
+                          <td className="py-3 px-3">
+                            <strong className="text-slate-900 block">{b.title}</strong>
+                            <span className="text-[11px] text-slate-400">{b.author} • {b.subject}</span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px]">
+                              {b.department}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <strong className="text-slate-800">{b.floor}</strong>
+                            <span className="block text-[11px] text-indigo-600 font-bold">{b.rack_number}</span>
+                          </td>
+                          <td className="py-3 px-3 text-slate-700">Shelf {b.shelf_number || 1}</td>
+                          <td className="py-3 px-3">
+                            <span className="font-bold text-emerald-700">{b.available_copies ?? 1}</span>
+                            <span className="text-slate-400"> / {b.total_copies ?? 2}</span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              b.availability_status === 'Available'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-700'
+                            }`}>
+                              {b.availability_status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setSelectedBook(b);
+                                  setBookForm({
+                                    title: b.title,
+                                    author: b.author,
+                                    subject: b.subject,
+                                    department: b.department,
+                                    category: b.category || b.rack_name,
+                                    isbn: b.isbn || '',
+                                    total_copies: b.total_copies ?? 2,
+                                    available_copies: b.available_copies ?? 2,
+                                    floor: b.floor,
+                                    rack_number: b.rack_number,
+                                    rack_name: b.rack_name,
+                                    shelf_number: b.shelf_number || 1,
+                                    position: b.position || ''
+                                  });
+                                  setIsEditBookModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900"
+                                title="Edit Book"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteBook(b)}
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600"
+                                title="Delete Book"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: BORROWING & RETURN MANAGEMENT */}
+          {activeTab === 'borrowing' && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="relative flex-1 w-full">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={txSearch}
+                      onChange={(e) => setTxSearch(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && loadTransactions()}
+                      placeholder="Search by student name, roll number, or book title..."
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                  <button
+                    onClick={loadTransactions}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                  >
+                    Search
+                  </button>
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-bold">
+                  {[
+                    { id: 'ALL', label: 'All Transactions' },
+                    { id: 'RETURN_REQUESTED', label: 'Return Requested (Pending)' },
+                    { id: 'BORROWED', label: 'Currently Borrowed' },
+                    { id: 'OVERDUE', label: 'Overdue Books' },
+                    { id: 'RETURNED', label: 'Completed (Returned)' }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setTxFilter(f.id)}
+                      className={`px-3.5 py-1.5 rounded-xl transition-all whitespace-nowrap ${
+                        txFilter === f.id
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Transactions Table */}
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                        <th className="py-3 px-3">Student</th>
+                        <th className="py-3 px-3">Book Borrowed</th>
+                        <th className="py-3 px-3">Issue Date</th>
+                        <th className="py-3 px-3">Due Date</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3 text-right">Staff Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {transactions.map(t => (
+                        <tr key={t.id} className="hover:bg-slate-50/80">
+                          <td className="py-3 px-3">
+                            <strong className="text-slate-900 block">{t.student_name}</strong>
+                            <span className="text-[10px] text-indigo-700 font-mono font-bold">{t.student_roll}</span>
+                            <span className="text-[10px] text-slate-400 block">{t.student_dept}</span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <strong className="text-slate-900 block">{t.book_title}</strong>
+                            <span className="text-[10px] text-slate-400">{t.book_floor} • Rack {t.book_rack}</span>
+                          </td>
+                          <td className="py-3 px-3 text-slate-600">{new Date(t.borrow_date).toLocaleDateString()}</td>
+                          <td className="py-3 px-3">
+                            <span className={t.is_overdue ? 'text-rose-600 font-bold' : 'text-slate-700'}>
+                              {new Date(t.due_date).toLocaleDateString()}
+                            </span>
+                            {t.is_overdue && (
+                              <span className="block text-[10px] text-rose-500 font-bold">
+                                Overdue by {Math.abs(t.days_left)} days
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              t.status === 'RETURNED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : t.status === 'RETURN_REQUESTED'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : t.is_overdue
+                                ? 'bg-rose-100 text-rose-700'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {t.status === 'RETURN_REQUESTED' ? 'Verification Needed' : t.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            {t.status === 'RETURNED' ? (
+                              <span className="text-[11px] text-emerald-600 font-bold flex items-center justify-end gap-1">
+                                <CheckCircle className="w-3.5 h-3.5" /> Returned
+                              </span>
+                            ) : (
+                              <button
+                                disabled={confirmingTxId === t.id}
+                                onClick={() => handleConfirmReturn(t)}
+                                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all"
+                              >
+                                {confirmingTxId === t.id ? 'Saving...' : 'Confirm Return'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: STUDENT MANAGEMENT */}
+          {activeTab === 'students' && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && loadStudents()}
+                    placeholder="Search students by roll number, name, phone, or email..."
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-indigo-600"
+                  />
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <select
+                    value={studentDeptFilter}
+                    onChange={(e) => setStudentDeptFilter(e.target.value)}
+                    className="px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white"
+                  >
+                    {['All', 'CSE', 'ECE', 'EEE', 'Civil', 'Mech', 'IT', 'MBA', 'Diploma'].map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={loadStudents}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                  >
+                    Filter
+                  </button>
+                </div>
+              </div>
+
+              {/* Students Table */}
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                        <th className="py-3 px-3">Roll Number</th>
+                        <th className="py-3 px-3">Student Name</th>
+                        <th className="py-3 px-3">Department &amp; Year</th>
+                        <th className="py-3 px-3">Contact</th>
+                        <th className="py-3 px-3">Active Loans</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {studentsList.map(s => (
+                        <tr key={s.id} className="hover:bg-slate-50/80">
+                          <td className="py-3 px-3 font-mono font-bold text-indigo-700">{s.roll_number}</td>
+                          <td className="py-3 px-3 font-bold text-slate-900">{s.name}</td>
+                          <td className="py-3 px-3 text-slate-600">
+                            {s.department} • <span className="text-[11px] text-slate-400">{s.year || '3rd Year'}</span>
+                          </td>
+                          <td className="py-3 px-3 text-slate-500 text-[11px]">
+                            {s.phone || 'No phone'} <br /> {s.email || 'No email'}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="font-bold text-blue-700">{s.active_borrowed_count || 0}</span> borrowed
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              s.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
+                            }`}>
+                              {s.is_active ? 'Active' : 'Deactivated'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleViewStudentDetails(s)}
+                                className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold hover:bg-blue-100 text-[11px]"
+                              >
+                                View History
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setStudentEditForm({
+                                    id: s.id,
+                                    name: s.name,
+                                    department: s.department,
+                                    year: s.year || '3rd Year B.Tech',
+                                    phone: s.phone || '',
+                                    email: s.email || '',
+                                    is_active: s.is_active
+                                  });
+                                  setIsEditStudentModalOpen(true);
+                                }}
+                                className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600"
+                                title="Edit Details"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleToggleStudentStatus(s)}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
+                                  s.is_active
+                                    ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                                }`}
+                              >
+                                {s.is_active ? 'Deactivate' : 'Activate'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: FLOOR & RACK EXPLORER */}
+          {activeTab === 'racks' && (
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">Physical Library Rack Capacities</h3>
+                  <p className="text-xs text-slate-500">Overview of all 35 library racks across Ground Floor &amp; First Floor</p>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
+                  {racksList.length} Racks Total
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {racksList.map(r => (
+                  <div key={r.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-mono font-bold text-[10px]">
+                        {r.rack_number}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-semibold">{r.floor}</span>
+                    </div>
+                    <h5 className="font-bold text-xs text-slate-900 mt-1">{r.rack_name}</h5>
+                    <p className="text-[11px] text-slate-500 truncate">{r.category}</p>
+                    <div className="mt-2 pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500">Books on Rack:</span>
+                      <strong className="text-indigo-600 font-extrabold">{r.book_count || 0}</strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* ── MODAL: ADD NEW BOOK ── */}
+      {isAddBookModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="font-extrabold text-base text-slate-900">Add New Book to Catalog</h3>
+              <button onClick={() => setIsAddBookModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddBookSubmit} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Book Title *</label>
+                  <input
+                    required
+                    value={bookForm.title}
+                    onChange={(e) => setBookForm({ ...bookForm, title: e.target.value })}
+                    placeholder="e.g. Design and Analysis of Algorithms"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Author Name *</label>
+                  <input
+                    required
+                    value={bookForm.author}
+                    onChange={(e) => setBookForm({ ...bookForm, author: e.target.value })}
+                    placeholder="e.g. Thomas H. Cormen"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Subject *</label>
+                  <input
+                    required
+                    value={bookForm.subject}
+                    onChange={(e) => setBookForm({ ...bookForm, subject: e.target.value })}
+                    placeholder="e.g. Data Structures &amp; Algorithms"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Department *</label>
+                  <select
+                    value={bookForm.department}
+                    onChange={(e) => setBookForm({ ...bookForm, department: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold bg-white"
+                  >
+                    {['CSE', 'ECE', 'EEE', 'Civil', 'Mechanical', 'MBA', 'Basic Sciences'].map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Category / Topic</label>
+                  <input
+                    value={bookForm.category}
+                    onChange={(e) => setBookForm({ ...bookForm, category: e.target.value })}
+                    placeholder="e.g. Computer Science Core"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Floor *</label>
+                  <select
+                    value={bookForm.floor}
+                    onChange={(e) => setBookForm({ ...bookForm, floor: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold bg-white"
+                  >
+                    <option value="Ground Floor">Ground Floor</option>
+                    <option value="First Floor">First Floor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Rack Number *</label>
+                  <input
+                    required
+                    value={bookForm.rack_number}
+                    onChange={(e) => setBookForm({ ...bookForm, rack_number: e.target.value })}
+                    placeholder="e.g. RACK-01"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Shelf Number (1-5)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="6"
+                    value={bookForm.shelf_number}
+                    onChange={(e) => setBookForm({ ...bookForm, shelf_number: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Total Quantity *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={bookForm.total_copies}
+                    onChange={(e) => setBookForm({ ...bookForm, total_copies: e.target.value, available_copies: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Available Quantity</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={bookForm.available_copies}
+                    onChange={(e) => setBookForm({ ...bookForm, available_copies: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">ISBN (Optional)</label>
+                  <input
+                    value={bookForm.isbn}
+                    onChange={(e) => setBookForm({ ...bookForm, isbn: e.target.value })}
+                    placeholder="e.g. 978-0262033848"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddBookModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md"
+                >
+                  Save Book
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: EDIT BOOK ── */}
+      {isEditBookModalOpen && selectedBook && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="font-extrabold text-base text-slate-900">Edit Book: {selectedBook.title}</h3>
+              <button onClick={() => setIsEditBookModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditBookSubmit} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Book Title *</label>
+                  <input
+                    required
+                    value={bookForm.title}
+                    onChange={(e) => setBookForm({ ...bookForm, title: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Author Name *</label>
+                  <input
+                    required
+                    value={bookForm.author}
+                    onChange={(e) => setBookForm({ ...bookForm, author: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Subject *</label>
+                  <input
+                    required
+                    value={bookForm.subject}
+                    onChange={(e) => setBookForm({ ...bookForm, subject: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Floor *</label>
+                  <select
+                    value={bookForm.floor}
+                    onChange={(e) => setBookForm({ ...bookForm, floor: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold bg-white"
+                  >
+                    <option value="Ground Floor">Ground Floor</option>
+                    <option value="First Floor">First Floor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Rack Number *</label>
+                  <input
+                    required
+                    value={bookForm.rack_number}
+                    onChange={(e) => setBookForm({ ...bookForm, rack_number: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Shelf Number</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="6"
+                    value={bookForm.shelf_number}
+                    onChange={(e) => setBookForm({ ...bookForm, shelf_number: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Total Quantity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={bookForm.total_copies}
+                    onChange={(e) => setBookForm({ ...bookForm, total_copies: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Available Quantity</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={bookForm.available_copies}
+                    onChange={(e) => setBookForm({ ...bookForm, available_copies: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditBookModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md"
+                >
+                  Update Book Details
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: VIEW STUDENT DETAILS & BORROWING HISTORY ── */}
+      {viewingStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900">{viewingStudent.name}</h3>
+                <p className="text-xs text-indigo-700 font-mono font-bold">Roll: {viewingStudent.roll_number}</p>
+              </div>
+              <button onClick={() => setViewingStudent(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <div>Department: <strong>{viewingStudent.department}</strong></div>
+                <div>Year: <strong>{viewingStudent.year || '3rd Year'}</strong></div>
+                <div>Phone: <strong>{viewingStudent.phone || '—'}</strong></div>
+                <div>Email: <strong>{viewingStudent.email || '—'}</strong></div>
+                <div>Status: <strong className={viewingStudent.is_active ? 'text-emerald-700' : 'text-rose-700'}>
+                  {viewingStudent.is_active ? 'Active' : 'Deactivated'}
+                </strong></div>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-slate-800 mb-2">Student Borrowing History ({viewingStudent.loans?.length || 0})</h4>
+                {viewingStudent.loans && viewingStudent.loans.length > 0 ? (
+                  <div className="space-y-2">
+                    {viewingStudent.loans.map(l => (
+                      <div key={l.id} className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                        <div>
+                          <strong className="text-slate-900 block">{l.book_title}</strong>
+                          <span className="text-[10px] text-slate-500">
+                            Borrowed: {new Date(l.borrow_date).toLocaleDateString()} • Due: {new Date(l.due_date).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          l.status === 'RETURNED' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {l.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <tr>
-                    <td colSpan="6" className="py-8 text-center text-slate-500">
-                      No books found matching criteria.
-                    </td>
-                  </tr>
+                  <p className="text-slate-400 py-4 text-center">No borrowing records for this student.</p>
                 )}
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
+        </div>
+      )}
 
-          {/* Pagination Controls */}
-          <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-100 text-xs">
-            <span className="text-slate-500">
-              Showing page {currentPage} of {Math.ceil(totalBooks / 20) || 1} ({totalBooks} books total)
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage(p => p - 1)}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 disabled:opacity-40 font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                Previous
-              </button>
-              <button
-                disabled={currentPage >= Math.ceil(totalBooks / 20)}
-                onClick={() => setCurrentPage(p => p + 1)}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 disabled:opacity-40 font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                Next
+      {/* ── MODAL: EDIT STUDENT DETAILS ── */}
+      {isEditStudentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <h3 className="font-extrabold text-base text-slate-900">Edit Student Details</h3>
+              <button onClick={() => setIsEditStudentModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
               </button>
             </div>
+
+            <form onSubmit={handleSaveStudentEdit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Student Full Name</label>
+                <input
+                  value={studentEditForm.name}
+                  onChange={(e) => setStudentEditForm({ ...studentEditForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Department</label>
+                <select
+                  value={studentEditForm.department}
+                  onChange={(e) => setStudentEditForm({ ...studentEditForm, department: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold bg-white"
+                >
+                  {['CSE', 'ECE', 'EEE', 'Civil', 'Mech', 'IT', 'MBA', 'Diploma'].map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Academic Year</label>
+                <input
+                  value={studentEditForm.year}
+                  onChange={(e) => setStudentEditForm({ ...studentEditForm, year: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Phone Number</label>
+                <input
+                  value={studentEditForm.phone}
+                  onChange={(e) => setStudentEditForm({ ...studentEditForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={studentEditForm.email}
+                  onChange={(e) => setStudentEditForm({ ...studentEditForm, email: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold"
+                />
+              </div>
+
+              <div className="pt-3 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditStudentModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md"
+                >
+                  Save Details
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </main>
-
-      {/* 3. ADD NEW BOOK MODAL */}
-      {isAddModalOpen && (
-        <BookFormModal
-          title="Add New Book to Inventory"
-          initialData={{
-            title: '',
-            author: '',
-            subject: '',
-            department: 'Civil Engineering',
-            floor: 'Ground Floor',
-            rack_number: 'Rack 1',
-            rack_name: 'Civil Engineering',
-            shelf_number: 1,
-            position: 'Section A - Shelf 1 - Pos 1',
-            availability_status: 'Available'
-          }}
-          onClose={() => setIsAddModalOpen(false)}
-          onSubmit={async (formData) => {
-            try {
-              await api.createBook(formData);
-              showNotification(`Book "${formData.title}" added to inventory!`);
-              setIsAddModalOpen(false);
-              loadStats();
-              loadBooks();
-            } catch (err) {
-              alert(`Failed to add book: ${err.message}`);
-            }
-          }}
-        />
       )}
-
-      {/* 4. EDIT BOOK DETAILS MODAL */}
-      {isEditModalOpen && activeBook && (
-        <BookFormModal
-          title={`Edit "${activeBook.title}"`}
-          initialData={activeBook}
-          onClose={() => {
-            setIsEditModalOpen(false);
-            setActiveBook(null);
-          }}
-          onSubmit={async (formData) => {
-            try {
-              await api.updateBook(activeBook.id, formData);
-              showNotification(`Book details updated!`);
-              setIsEditModalOpen(false);
-              setActiveBook(null);
-              loadStats();
-              loadBooks();
-            } catch (err) {
-              alert(`Failed to update book: ${err.message}`);
-            }
-          }}
-        />
-      )}
-
-      {/* 5. UPDATE RACK LOCATION MODAL */}
-      {isLocationModalOpen && activeBook && (
-        <LocationModal
-          book={activeBook}
-          onClose={() => {
-            setIsLocationModalOpen(false);
-            setActiveBook(null);
-          }}
-          onSubmit={async (locData) => {
-            try {
-              await api.updateLocation(activeBook.id, locData);
-              showNotification(`Rack location updated! Students will now see the new position.`);
-              setIsLocationModalOpen(false);
-              setActiveBook(null);
-              loadStats();
-              loadBooks();
-            } catch (err) {
-              alert(`Failed to update location: ${err.message}`);
-            }
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// Reusable Book Form Modal for Add and Edit
-function BookFormModal({ title, initialData, onClose, onSubmit }) {
-  const [formData, setFormData] = useState(initialData);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
-        <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
-          <h3 className="font-bold text-base">{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Book Title *</label>
-            <input
-              type="text"
-              required
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Author</label>
-              <input
-                type="text"
-                value={formData.author}
-                onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Subject</label>
-              <input
-                type="text"
-                value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
-              <select
-                value={formData.department}
-                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium bg-white"
-              >
-                <option value="Civil Engineering">Civil Engineering</option>
-                <option value="Mechanical Engineering">Mechanical Engineering</option>
-                <option value="Electrical & Electronics Engineering">Electrical & Electronics</option>
-                <option value="Electronics & Communication Engineering">Electronics & Communication</option>
-                <option value="Computer Science & Engineering">Computer Science & Engg</option>
-                <option value="AI & ML">AI & ML</option>
-                <option value="Basic Sciences & Humanities">Basic Sciences & Humanities</option>
-                <option value="Management Studies">Management Studies (MBA)</option>
-                <option value="Diploma">Diploma Studies</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Floor *</label>
-              <select
-                value={formData.floor}
-                onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium bg-white"
-              >
-                <option value="Ground Floor">Ground Floor</option>
-                <option value="First Floor">First Floor</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Rack Number *</label>
-              <input
-                type="text"
-                required
-                value={formData.rack_number}
-                onChange={(e) => setFormData({ ...formData, rack_number: e.target.value })}
-                placeholder="e.g. Rack 9, Diploma Books Rack..."
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Rack Name</label>
-              <input
-                type="text"
-                value={formData.rack_name}
-                onChange={(e) => setFormData({ ...formData, rack_name: e.target.value })}
-                placeholder="e.g. Computer Science Engineering"
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Shelf Number</label>
-              <input
-                type="number"
-                min="1"
-                max="8"
-                value={formData.shelf_number}
-                onChange={(e) => setFormData({ ...formData, shelf_number: parseInt(e.target.value) || 1 })}
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1">Book Position</label>
-              <input
-                type="text"
-                value={formData.position}
-                onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                placeholder="e.g. Section B - Shelf 2 - Pos 4"
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Availability Status</label>
-            <select
-              value={formData.availability_status}
-              onChange={(e) => setFormData({ ...formData, availability_status: e.target.value })}
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium bg-white"
-            >
-              <option value="Available">Available On Shelf</option>
-              <option value="Issued">Issued / Borrowed</option>
-            </select>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md"
-            >
-              Save Record
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// Modal for updating rack position
-function LocationModal({ book, onClose, onSubmit }) {
-  const [floor, setFloor] = useState(book.floor);
-  const [rackNumber, setRackNumber] = useState(book.rack_number);
-  const [rackName, setRackName] = useState(book.rack_name);
-  const [shelfNumber, setShelfNumber] = useState(book.shelf_number);
-  const [position, setPosition] = useState(book.position);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit({
-      floor,
-      rack_number: rackNumber,
-      rack_name: rackName,
-      shelf_number: shelfNumber,
-      position
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
-        <div className="flex items-center justify-between px-6 py-4 bg-sky-950 text-white">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-sky-400" />
-            <h3 className="font-bold text-base">Update Rack Location</h3>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-sky-900 text-slate-400 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <p className="text-xs text-slate-600">
-            Relocating: <strong>"{book.title}"</strong>. The updated position will immediately show in the Student Portal and indoor map.
-          </p>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Floor Level</label>
-            <select
-              value={floor}
-              onChange={(e) => setFloor(e.target.value)}
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium bg-white"
-            >
-              <option value="Ground Floor">Ground Floor</option>
-              <option value="First Floor">First Floor</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Target Rack Number</label>
-            <input
-              type="text"
-              required
-              value={rackNumber}
-              onChange={(e) => setRackNumber(e.target.value)}
-              placeholder="e.g. Rack 9, Rack 14..."
-              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Shelf Number</label>
-              <input
-                type="number"
-                min="1"
-                max="8"
-                value={shelfNumber}
-                onChange={(e) => setShelfNumber(parseInt(e.target.value) || 1)}
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">New Position</label>
-              <input
-                type="text"
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                placeholder="e.g. Section B - Shelf 3 - Pos 2"
-                className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md"
-            >
-              Update Location
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

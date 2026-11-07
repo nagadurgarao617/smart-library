@@ -52,7 +52,8 @@ export default function InteractiveMapViewer({
   selectedBook = null,
   initialFloor = 'Ground Floor',
   initialRackId = null,
-  onClose = null
+  onClose = null,
+  onCollectBook = null
 }) {
   const [currentFloor, setCurrentFloor] = useState(initialFloor);
   const [selectedRackId, setSelectedRackId] = useState(initialRackId);
@@ -68,6 +69,11 @@ export default function InteractiveMapViewer({
   const [markerPos, setMarkerPos] = useState(null);
   const [reachedDestination, setReachedDestination] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(true);
+
+  // Book collection confirmation prompt
+  const [showCollectPrompt, setShowCollectPrompt] = useState(false);
+  const [collectMessage, setCollectMessage] = useState(null);
+  const [isCollecting, setIsCollecting] = useState(false);
 
   const animRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -210,6 +216,9 @@ export default function InteractiveMapViewer({
         setIsNavigating(false);
         setReachedDestination(true);
         setCurrentStepIndex(activeRoute.instructions.length - 1);
+        if (selectedBook) {
+          setShowCollectPrompt(true);
+        }
 
         confetti({
           particleCount: 60,
@@ -280,6 +289,22 @@ export default function InteractiveMapViewer({
   const handleResetZoom = () => setZoomLevel(1);
 
   const isFirstFloor = currentFloor.includes('First') || currentFloor === '1F';
+
+  const handleConfirmCollection = async () => {
+    if (!selectedBook) return;
+    setIsCollecting(true);
+    try {
+      if (onCollectBook) {
+        await onCollectBook(selectedBook);
+      }
+      setCollectMessage({ type: 'success', text: `Success! '${selectedBook.title}' recorded in your Borrowed Books.` });
+      setShowCollectPrompt(false);
+    } catch (err) {
+      setCollectMessage({ type: 'error', text: err.message || 'Failed to record borrowing transaction.' });
+    } finally {
+      setIsCollecting(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-slate-900 text-slate-100 rounded-2xl overflow-hidden shadow-2xl border border-slate-700/60">
@@ -457,6 +482,47 @@ export default function InteractiveMapViewer({
             </div>
           </div>
         )}
+
+        {/* DID YOU COLLECT THIS BOOK? MODAL / TOAST */}
+        {selectedBook && showCollectPrompt && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 border-2 border-amber-400 text-white px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-lg flex flex-col sm:flex-row items-center gap-4 max-w-lg w-[92%] animate-in fade-in slide-in-from-bottom-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-400/40 text-amber-300 flex items-center justify-center font-black text-lg shrink-0">
+                📖
+              </div>
+              <div>
+                <p className="font-black text-sm text-amber-300">Did you collect this book?</p>
+                <p className="text-xs text-slate-300 truncate max-w-xs">{selectedBook.title}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Floor: {selectedBook.floor} • Rack {selectedBook.rack_number} • Shelf {selectedBook.shelf_number}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                disabled={isCollecting}
+                onClick={handleConfirmCollection}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/25 transition-transform hover:scale-105"
+              >
+                {isCollecting ? 'Saving...' : 'YES, I COLLECTED IT'}
+              </button>
+              <button
+                onClick={() => setShowCollectPrompt(false)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700"
+              >
+                NO
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* COLLECTION STATUS ALERT */}
+        {collectMessage && (
+          <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-30 px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-lg flex items-center gap-2 text-xs font-bold border ${
+            collectMessage.type === 'success' ? 'bg-emerald-950/90 border-emerald-500 text-emerald-200' : 'bg-rose-950/90 border-rose-500 text-rose-200'
+          }`}>
+            <span>{collectMessage.text}</span>
+            <button onClick={() => setCollectMessage(null)} className="ml-2 text-slate-400 hover:text-white">✕</button>
+          </div>
+        )}
       </div>
 
       {/* 3. DEDICATED STEPS NAVIGATION DOCK (BELOW MAP - NEVER OVERLAPS OR COVERS MAP) */}
@@ -580,6 +646,14 @@ export default function InteractiveMapViewer({
                 {selectedBook.rack_number} • {selectedBook.position}
               </span>
             </div>
+            {onCollectBook && (
+              <button
+                onClick={() => setShowCollectPrompt(true)}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-md shadow-emerald-600/30 transition-all hover:scale-105"
+              >
+                Collect Book
+              </button>
+            )}
             {onClose && (
               <button
                 onClick={onClose}

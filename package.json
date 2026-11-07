@@ -1,13 +1,19 @@
 {
   "name": "smart-library",
   "version": "1.0.0",
-  "description": "",
-  "main": "script.js",
+  "description": "Smart Library Book Finder and Indoor Navigation System - Sri Vasavi Engineering College",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npm --prefix frontend run build",
+    "start": "python -m uvicorn backend_python.main:app --host 0.0.0.0 --port 5000",
+    "migrate:pg": "python -m backend_python.migrate_data"
   },
-  "keywords": [],
+  "keywords": [
+    "smart-library",
+    "fastapi",
+    "postgresql",
+    "react",
+    "indoor-navigation"
+  ],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "license": "ISC"
 }

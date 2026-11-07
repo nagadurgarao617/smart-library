@@ -9,6 +9,7 @@ import { api } from './services/api';
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [staffUser, setStaffUser] = useState(null);
+  const [studentUser, setStudentUser] = useState(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [stats, setStats] = useState(null);
 
@@ -21,6 +22,17 @@ export default function App() {
         .catch(() => {
           localStorage.removeItem('svec_staff_token');
           setStaffUser(null);
+        });
+    }
+
+    // Check if student token exists
+    const studentToken = localStorage.getItem('svec_student_token');
+    if (studentToken) {
+      api.getStudentProfile()
+        .then(res => setStudentUser(res.student))
+        .catch(() => {
+          localStorage.removeItem('svec_student_token');
+          setStudentUser(null);
         });
     }
 
@@ -38,6 +50,17 @@ export default function App() {
         setActiveTab={setActiveTab}
         onOpenQr={() => setIsQrModalOpen(true)}
         staffUser={staffUser}
+        studentUser={studentUser}
+        onStaffLogout={() => {
+          localStorage.removeItem('svec_staff_token');
+          setStaffUser(null);
+          setActiveTab('home');
+        }}
+        onStudentLogout={() => {
+          localStorage.removeItem('svec_student_token');
+          setStudentUser(null);
+          setActiveTab('home');
+        }}
       />
 
       {/* Main Page Content */}
@@ -48,10 +71,18 @@ export default function App() {
             onNavigateToStaff={() => setActiveTab('staff')}
             onOpenQr={() => setIsQrModalOpen(true)}
             stats={stats}
+            setStaffUser={setStaffUser}
+            setStudentUser={setStudentUser}
           />
         )}
 
-        {activeTab === 'student' && <StudentPortal />}
+        {activeTab === 'student' && (
+          <StudentPortal
+            studentUser={studentUser}
+            setStudentUser={setStudentUser}
+            onOpenLogin={() => setActiveTab('home')}
+          />
+        )}
 
         {activeTab === 'staff' && (
           <StaffPortal
